@@ -9,12 +9,12 @@
 // ------------------------------------------------------------
 // Memory layout
 //
-.const COLOR_OFFSET = $0800				// Offset ColorRam to make bank $10000 contiguous
-.const COLOR_RAM = $ff80000 + COLOR_OFFSET
+.const COLOR_OFFSET 		= $0800				// Offset ColorRam to make bank $10000 contiguous
+.const COLOR_RAM 			= $ff80000 + COLOR_OFFSET
 
-.const GRAPHICS_RAM = $10000			// all bg chars / pixie data goes here
-.const PIXIEANDSCREEN_RAM = $50000		// screen ram / pixie work ram goes here
-										// must be on a $100 alignment due to RRB pixie MAP behavior
+.const GRAPHICS_RAM 		= $10000			// all bg chars / pixie data goes here
+.const PIXIEANDSCREEN_RAM 	= $50000			// screen ram / pixie work ram goes here
+												// must be on a $100 alignment due to RRB pixie MAP behavior
 
 // --------------
 .segmentdef Zeropage [start=$02, min=$02, max=$fb, virtual]
@@ -30,6 +30,7 @@
 
 // --------------
 // Ensure PixieWorkRam is on a $100 alignemt due to RRB pixie MAP behavior
+//
 .segmentdef PixieWorkRam [start=PIXIEANDSCREEN_RAM, max=PIXIEANDSCREEN_RAM+$ffff, virtual]
 .segmentdef ScreenRam [startAfter="PixieWorkRam", max=PIXIEANDSCREEN_RAM+$ffff, virtual]
 .segmentdef MapRam [startAfter="ScreenRam", max=PIXIEANDSCREEN_RAM+$ffff, virtual]
@@ -38,18 +39,21 @@
 // Defines to describe the screen size
 //
 .const SCREEN_WIDTH = 320
-.const SCREEN_HEIGHT = 200
+.const SCREEN_HEIGHT = 104
 
 .const PLAY_SCREEN_WIDTH = 320
 .const PLAY_SCREEN_HEIGHT = 200
 
+.const CREDITS_SCREEN_WIDTH = 256
+.const CREDITS_SCREEN_HEIGHT = 224
+
 // ------------------------------------------------------------
 //
-#import "includes/m65macros.s"
+#import "m65macros.s"
 
-#import "includes/layers_Functions.s"
-#import "includes/layout_Functions.s"
-#import "includes/assets_Functions.s"
+#import "layers_Functions.s"
+#import "layout_Functions.s"
+#import "assets_Functions.s"
 
 // ------------------------------------------------------------
 // Layer constants
@@ -111,14 +115,14 @@
 //
 // 4) Always end with EOL layer
 //
-.const Layout3 = NewLayout("credits", PLAY_SCREEN_WIDTH, PLAY_SCREEN_HEIGHT, (PLAY_SCREEN_HEIGHT / 8))
-.const Layout3_BG0a = Layer_BG("bg_level0a", (PLAY_SCREEN_WIDTH/16) + 1, true, 1)
-.const Layout3_BG0b = Layer_BG("bg_level0b", (PLAY_SCREEN_WIDTH/16) + 1, true, 1)
-.const Layout3_BG1a = Layer_BG("bg_level1a", (PLAY_SCREEN_WIDTH/16) + 1, true, 1)
-.const Layout3_BG1b = Layer_BG("bg_level1b", (PLAY_SCREEN_WIDTH/16) + 1, true, 1)
+.const Layout3 = NewLayout("credits", CREDITS_SCREEN_WIDTH, CREDITS_SCREEN_HEIGHT, (CREDITS_SCREEN_HEIGHT / 8))
+.const Layout3_BG0a = Layer_BG("bg_level0a", (CREDITS_SCREEN_WIDTH/16) + 1, true, 1)
+.const Layout3_BG0b = Layer_BG("bg_level0b", (CREDITS_SCREEN_WIDTH/16) + 1, true, 1)
+.const Layout3_BG1a = Layer_BG("bg_level1a", (CREDITS_SCREEN_WIDTH/16) + 1, true, 1)
+.const Layout3_BG1b = Layer_BG("bg_level1b", (CREDITS_SCREEN_WIDTH/16) + 1, true, 1)
 .const Layout3_Pixie = Layer_PIXIE("pixie", NUM_PIXIEWORDS, 1)
-.const Layout3_BG2a = Layer_BG("bg_level2a", (PLAY_SCREEN_WIDTH/16) + 1, true, 1)
-.const Layout3_BG2b = Layer_BG("bg_level2b", (PLAY_SCREEN_WIDTH/16) + 1, true, 1)
+.const Layout3_BG2a = Layer_BG("bg_level2a", (CREDITS_SCREEN_WIDTH/16) + 1, true, 1)
+.const Layout3_BG2b = Layer_BG("bg_level2b", (CREDITS_SCREEN_WIDTH/16) + 1, true, 1)
 .const Layout3_EOL = Layer_EOL("eol")
 .const Layout3end = EndLayout(Layout3)
 
@@ -156,8 +160,6 @@
 //
 .segment Zeropage "Main zeropage"
 
-TotalTime:		.byte $00
-
 Tmp:			.word $0000,$0000		// General reusable data (Don't use in IRQ)
 Tmp1:			.word $0000,$0000
 Tmp2:			.word $0000,$0000
@@ -166,8 +168,6 @@ Tmp4:			.word $0000,$0000
 Tmp5:			.word $0000,$0000
 Tmp6:			.word $0000,$0000
 Tmp7:			.word $0000,$0000
-
-.print "TotalTime = $" + toHexString(TotalTime)
 
 // ------------------------------------------------------------
 //
@@ -208,14 +208,14 @@ SaveStateEnd:
 
 .print "--------"
 
-#import "includes/layers_code.s"
-#import "includes/layout_code.s"
-#import "includes/assets_code.s"
-#import "includes/system_code.s"
-#import "includes/fastLoader.s"
-#import "includes/decruncher.s"
-#import "includes/keyb_code.s"
-#import "includes/pixie_code.s"
+#import "layers_code.s"
+#import "layout_code.s"
+#import "assets_code.s"
+#import "system_code.s"
+#import "fastLoader.s"
+#import "decruncher.s"
+#import "keyb_code.s"
+#import "pixie_code.s"
 
 // ------------------------------------------------------------
 //
@@ -231,11 +231,11 @@ Entry:
 {
 	jsr System.Initialization1
 
+	// Init the raster IRQ
+	//
  	sei
 
-	lda #$7f
-    sta $dc0d
-    sta $dd0d
+	disableCIAInterrupts()
 
     lda $dc0d
     lda $dd0d
@@ -283,17 +283,10 @@ Entry:
 	jsr InitPalette
 	jsr InitBGMap
 
-	TextSetPos(0,0)
-//	TextPrintMsg(imessage)
-
 	// Setup the initial game state
 	lda #GStateTitles
 	sta RequestGameState
 	jsr SwitchGameStates
-
-    // Disable RSTDELENS
-    lda #%01000000
-    trb $d05d
 
     // set the interrupt to line bottom position
     jsr Irq.SetIRQBotPos
@@ -367,15 +360,13 @@ skipEnable:
 
 	DbgBord(0)
 
-	lda $d012
-	sta TotalTime
-
 	jmp mainloop
 }
 
 // ------------------------------------------------------------
 //
-SwitchGameStates: {
+SwitchGameStates: 
+{
 	sta GameState
 	asl
 	tax
@@ -385,13 +376,15 @@ SwitchGameStates: {
 
 // ------------------------------------------------------------
 //
-RenderNop: {
+RenderNop: 
+{
 	rts
 }
 
 // ------------------------------------------------------------
 //
-InitPalette: {
+InitPalette: 
+{
 	.var palPtr = Tmp1			// 16 bit
 
 	//Bit pairs = CurrPalette, TextPalette, SpritePalette, AltPalette
